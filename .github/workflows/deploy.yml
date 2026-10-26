@@ -1,0 +1,36 @@
+name: Déploiement FTP OVH
+
+# Déploie le site sur l'hébergement OVH (carredhotes.fr) à chaque push sur main.
+# Le mot de passe FTP est stocké dans le secret GitHub "FTP_PASSWORD"
+# (Settings > Secrets and variables > Actions). Il n'apparaît jamais dans le code.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # permet aussi un déploiement manuel depuis l'onglet Actions
+
+concurrency:
+  group: deploy-ftp-ovh
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Envoi des fichiers vers OVH
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Déploiement FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ftp.cluster131.hosting.ovh.net
+          username: carredj
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          local-dir: ./
+          server-dir: /www/
+          exclude: |
+            **/.git*
+            **/.github/**
