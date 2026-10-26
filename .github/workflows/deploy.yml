@@ -27,7 +27,7 @@ jobs:
           server: ftp.cluster131.hosting.ovh.net
           username: carredj
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
+          protocol: ftp
           port: 21
           local-dir: ./
           server-dir: /www/
