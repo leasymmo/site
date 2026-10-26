@@ -1,16 +1,18 @@
 name: Déploiement FTP OVH
 
-# Déploie le site sur l'hébergement OVH (carredhotes.fr) à chaque push sur main.
+# Déploie le site sur l'hébergement OVH (carredhotes.fr) à chaque push :
+#   - branche main -> racine du site (https://carredhotes.fr)
+#   - branche dev  -> dossier /dev (https://carredhotes.fr/dev) pour prévisualisation
 # Le mot de passe FTP est stocké dans le secret GitHub "FTP_PASSWORD"
 # (Settings > Secrets and variables > Actions). Il n'apparaît jamais dans le code.
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch: # permet aussi un déploiement manuel depuis l'onglet Actions
 
 concurrency:
-  group: deploy-ftp-ovh
+  group: deploy-ftp-ovh-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -30,7 +32,7 @@ jobs:
           protocol: ftp
           port: 21
           local-dir: ./
-          server-dir: /www/
+          server-dir: ${{ github.ref == 'refs/heads/dev' && '/www/dev/' || '/www/' }}
           exclude: |
             **/.git*
             **/.github/**
