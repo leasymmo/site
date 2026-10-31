@@ -617,6 +617,7 @@
         background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
       }
       .lead-form input:not([type="hidden"]):focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+      .hp-field { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; opacity: 0; }
       .lead-confirm {
         display: none; grid-column: 1 / -1; padding-top: 4px;
         color: var(--ink); font-size: 14px; font-weight: 500;
@@ -1836,6 +1837,7 @@
 <input id="leadNetAmount" name="montant_net" type="hidden"/>
 <input id="leadNet" name="revenu_net_estime" type="hidden"/>
 <input id="leadServiceValue" name="valeur_services_inclus" type="hidden"/>
+<input aria-hidden="true" autocomplete="off" class="hp-field" id="leadSiteWeb" name="site_web" tabindex="-1" type="text"/>
 <button class="btn" type="submit">Recevoir mon estimation <span aria-hidden="true">→</span></button>
 <p class="lead-privacy" id="leadPrivacy">Sans engagement. Votre adresse sera utilisée pour répondre à votre demande.</p>
 <p class="lead-confirm" id="leadConfirm" role="status"></p>
@@ -1935,6 +1937,7 @@
 <textarea id="cfMsg" name="message" required="" rows="5"></textarea>
 </div>
 <div>
+<input aria-hidden="true" autocomplete="off" class="hp-field" id="cfSiteWeb" name="site_web" tabindex="-1" type="text"/>
 <button class="btn" type="submit"><i data-lucide="send" style="width:15px;height:15px"></i> Envoyer ma demande</button>
 </div>
 <p class="form-ok" id="formOk" role="status"></p>
@@ -2452,37 +2455,71 @@
       });
       applySegment();
 
-      /* Capture du chiffrage : prépare une demande détaillée dans la messagerie du prospect. */
+      /* ----- Envoi direct des formulaires -----
+         Les donnees sont postees vers envoi.php (script heberge chez OVH,
+         sur le meme hebergement que le site) qui expedie le courriel au bon
+         destinataire. Aucune messagerie ne s'ouvre chez le visiteur et
+         aucun service externe n'est utilise. */
+      function baseDuSite() {
+        var routes = ['accueil', 'logements', 'methode', 'offres', 'simulateur', 'temoignages', 'faq', 'contact', 'reservation'];
+        var morceaux = window.location.pathname.split('/').filter(function (m) { return m !== ''; });
+        var dernier = morceaux.length ? morceaux[morceaux.length - 1] : '';
+        if (routes.indexOf(dernier) !== -1 || dernier === 'index.html') morceaux.pop();
+        return '/' + (morceaux.length ? morceaux.join('/') + '/' : '');
+      }
+      function envoyerFormulaire(donnees) {
+        return fetch(baseDuSite() + 'envoi.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+          body: new URLSearchParams(donnees).toString()
+        }).then(function (reponse) {
+          return reponse.json().catch(function () { return null; }).then(function (data) {
+            if (!reponse.ok || !data || !data.ok) {
+              throw new Error(data && data.message ? data.message : 'Envoi impossible');
+            }
+            return data;
+          });
+        });
+      }
+
+      /* Capture du chiffrage : envoi direct de la demande detaillee a contact@carredhotes.fr. */
       document.getElementById('leadForm').addEventListener('submit', function (e) {
         e.preventDefault();
-        var email = document.getElementById('leadEmail').value.trim();
-        var surface = surfaceValue();
-        var surfaceLine = surface === null ? '' : 'Surface du logement : ' + surface.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' m²\n';
-        var subject = encodeURIComponent('[Site] Demande de chiffrage détaillé');
-        var body = encodeURIComponent(
-          'Bonjour Carré d\'Hôtes,\n\nJe souhaite recevoir un chiffrage détaillé pour mon logement.\n\n' +
-          'Adresse électronique : ' + email + '\n' +
-          'Adresse du logement : ' + (currentAddress || simAddress.value.trim()) + '\n' +
-          'Zone : ' + currentZone + '\n' +
-          'Couchages : ' + simSleeps.value + '\n' +
-          surfaceLine +
-          'Prix moyen par nuit simulé : ' + document.getElementById('simPriceOut').textContent + '\n' +
-          'Taux d\'occupation simulé : ' + document.getElementById('simOccOut').textContent + '\n' +
-          'Formule : ' + rateName + '\n' +
-          'Revenu brut annuel estimé : ' + fmt(latestGross) + '\n' +
-          'Frais de plateforme (' + document.getElementById('simPlatformOut').textContent + ') : ' + fmt(latestPlatformFee) + '\n' +
-          'Taxe de séjour : ' + fmt(latestTouristTax) + '\n' +
-          'Montant net avant commission : ' + fmt(latestNetAmount) + '\n' +
-          'Commission Carré d\'Hôtes calculée sur le montant net : ' + fmt(latestFee) + '\n' +
-          'Revenu net annuel estimé : ' + fmt(latestNet) + '\n' +
-          'Valeur des services inclus : ' + fmt(latestServiceValue) + '\n' +
-          'Revenu net de chez net annuel : ' + fmt(latestTrueNet) + '\n\n' +
-          'Merci de me recontacter avec une estimation personnalisée.'
-        );
-        window.location.href = 'mailto:contact@carredhotes.fr?subject=' + subject + '&body=' + body;
+        var form = e.target;
+        var bouton = form.querySelector('button[type="submit"]');
         var confirm = document.getElementById('leadConfirm');
+        var surface = surfaceValue();
+        var donnees = {
+          type: 'estimation',
+          email: document.getElementById('leadEmail').value.trim(),
+          adresse_logement: currentAddress || simAddress.value.trim(),
+          zone: currentZone,
+          couchages: simSleeps.value,
+          surface: surface === null ? '' : surface.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' m\u00b2',
+          prix_nuit: document.getElementById('simPriceOut').textContent,
+          occupation: document.getElementById('simOccOut').textContent,
+          formule: rateName,
+          revenu_brut: fmt(latestGross),
+          frais_plateforme: fmt(latestPlatformFee) + ' (' + document.getElementById('simPlatformOut').textContent + ')',
+          taxe_sejour: fmt(latestTouristTax),
+          montant_net: fmt(latestNetAmount),
+          commission: fmt(latestFee),
+          revenu_net: fmt(latestNet),
+          valeur_services: fmt(latestServiceValue),
+          revenu_net_net: fmt(latestTrueNet),
+          site_web: document.getElementById('leadSiteWeb').value
+        };
+        bouton.disabled = true;
         confirm.classList.add('show');
-        confirm.textContent = 'Merci ! Votre demande est prête : envoyez le message prérempli depuis votre messagerie pour recevoir votre chiffrage détaillé.';
+        confirm.textContent = 'Envoi de votre demande en cours\u2026';
+        envoyerFormulaire(donnees).then(function () {
+          confirm.textContent = 'Merci ! Votre demande a bien été envoyée : vous recevrez votre chiffrage détaillé par courriel.';
+          form.reset();
+        }).catch(function () {
+          confirm.textContent = 'L\'envoi n\'a pas abouti. Réessayez dans un instant, ou écrivez-nous à contact@carredhotes.fr.';
+        }).finally(function () {
+          bouton.disabled = false;
+        });
       });
 
       /* FAQ : une seule réponse ouverte à la fois. */
@@ -2495,23 +2532,34 @@
         });
       });
 
-      /* Contact : compose un e-mail */
+      /* Contact : envoi direct, route selon le sujet choisi
+         ("Je suis voyageur" -> anthony@carredhotes.fr, sinon contact@carredhotes.fr). */
       document.getElementById('contactForm').addEventListener('submit', function (e) {
         e.preventDefault();
-        var name = document.getElementById('cfName').value.trim();
-        var mail = document.getElementById('cfMail').value.trim();
-        var topic = document.getElementById('cfTopic').value;
-        var msg = document.getElementById('cfMsg').value.trim();
-        var recipient = topic.indexOf('Je suis voyageur') === 0
-          ? 'anthony@carredhotes.fr'
-          : 'contact@carredhotes.fr';
-        var subject = encodeURIComponent('[Site] ' + topic);
-        var body = encodeURIComponent(msg + '\n\n— ' + name + ' (' + mail + ')');
-        window.location.href = 'mailto:' + recipient + '?subject=' + subject + '&body=' + body;
+        var form = e.target;
+        var bouton = form.querySelector('button[type="submit"]');
         var ok = document.getElementById('formOk');
+        var name = document.getElementById('cfName').value.trim();
+        var recipient = document.getElementById('cfTopic').value.indexOf('Je suis voyageur') === 0 ? 'anthony@carredhotes.fr' : 'contact@carredhotes.fr';
+        var donnees = {
+          type: 'contact',
+          nom: name,
+          email: document.getElementById('cfMail').value.trim(),
+          sujet: document.getElementById('cfTopic').value,
+          message: document.getElementById('cfMsg').value.trim(),
+          site_web: document.getElementById('cfSiteWeb').value
+        };
+        bouton.disabled = true;
         ok.classList.add('show');
-        ok.textContent = 'Merci ' + name.split(' ')[0] + ' — votre messagerie s’ouvre avec le message ' +
-          'pré-rempli. S’il ne s’ouvre pas, écrivez-nous à ' + recipient + '.';
+        ok.textContent = 'Envoi de votre message en cours\u2026';
+        envoyerFormulaire(donnees).then(function () {
+          ok.textContent = 'Merci ' + name.split(' ')[0] + ' \u2014 votre message a bien été envoyé à ' + recipient + '. Nous revenons vers vous tres vite.';
+          form.reset();
+        }).catch(function () {
+          ok.textContent = 'L\'envoi n\'a pas abouti. Réessayez dans un instant, ou écrivez-nous à ' + recipient + '.';
+        }).finally(function () {
+          bouton.disabled = false;
+        });
       });
 
       /* ----- Animations : header, parallaxe, révélation au scroll, compteurs ----- */
