@@ -11,11 +11,15 @@
 
 RewriteEngine On
 
-# Enlever le slash final éventuel (/offres/ -> /offres) pour que les
-# chemins relatifs (assets/…) restent résolus depuis la racine du site.
-RewriteRule ^(accueil|logements|methode|offres|simulateur|temoignages|faq|contact|reservation)/$ $1 [R=301,L]
+# Cas du slash final (/offres/) : AUCUNE redirection — vérifié le
+# 31/10/2026 sur cet hébergement mutualisé OVH, une redirection relative
+# (R=301) exposait le chemin interne du serveur (/homez.…) et finissait
+# en 404. À la place, réécriture interne en deux temps :
+# 1) les assets demandés sous la route (/offres/assets/…) sont ramenés
+#    à leur vrai emplacement ;
+RewriteRule ^(accueil|logements|methode|offres|simulateur|temoignages|faq|contact|reservation)/(assets/.+)$ $2 [L]
 
-# Servir la page unique pour chaque route propre.
+# 2) Servir la page unique pour chaque route propre, slash final accepté.
 # (Les fichiers et dossiers réels — assets, images… — ne correspondent
 # pas à ces noms et ne sont donc pas affectés.)
-RewriteRule ^(accueil|logements|methode|offres|simulateur|temoignages|faq|contact|reservation)$ index.html [L]
+RewriteRule ^(accueil|logements|methode|offres|simulateur|temoignages|faq|contact|reservation)/?$ index.html [L]
