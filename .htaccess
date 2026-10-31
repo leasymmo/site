@@ -1,0 +1,21 @@
+# URL propres du site one-page Carré d'Hôtes (hébergement OVH / Apache)
+#
+# Le site reste une seule page : index.html à la racine du dépôt.
+# Les adresses /offres, /reservation, /simulateur… servent index.html
+# SANS changer l'URL affichée ; le JavaScript de la page lit le chemin
+# et affiche la section ou la vue correspondante.
+# Les liens internes et la navigation utilisent l'API History :
+# aucun rechargement, l'URL propre est mise à jour à chaque clic.
+# Les anciens liens en /#offres, /#reservation… continuent de fonctionner :
+# l'ancre est interprétée par la page puis convertie en URL propre.
+
+RewriteEngine On
+
+# Enlever le slash final éventuel (/offres/ -> /offres) pour que les
+# chemins relatifs (assets/…) restent résolus depuis la racine du site.
+RewriteRule ^(accueil|logements|methode|offres|simulateur|temoignages|faq|contact|reservation)/$ $1 [R=301,L]
+
+# Servir la page unique pour chaque route propre.
+# (Les fichiers et dossiers réels — assets, images… — ne correspondent
+# pas à ces noms et ne sont donc pas affectés.)
+RewriteRule ^(accueil|logements|methode|offres|simulateur|temoignages|faq|contact|reservation)$ index.html [L]
